@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>포켓몬 유나이트 AI 승패 분석기</title>
+  <style>
+    :root {
+      --bg: #0f1220;
+      --card: #181d31;
+      --accent: #ffd257;
+      --blue: #4f8cff;
+      --red: #ff5f6d;
+      --text: #eef1f8;
+      --muted: #a7b0c7;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+      background: radial-gradient(circle at 20% 10%, #1b2340 0%, var(--bg) 45%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    header {
+      padding: 42px 20px 24px;
+      text-align: center;
+    }
+    h1 { margin: 0 0 10px; font-size: clamp(26px, 5vw, 42px); }
+    h1 span { color: var(--accent); }
+    p.lead { margin: 0 auto; max-width: 720px; color: var(--muted); line-height: 1.6; }
+    main { max-width: 1080px; margin: 0 auto; padding: 24px 20px 70px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    @media (max-width: 820px) { .grid { grid-template-columns: 1fr; } }
+    .card {
+      background: rgba(24, 29, 49, .92);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 18px;
+      padding: 22px;
+      box-shadow: 0 18px 40px rgba(0,0,0,.25);
+    }
+    label { display: block; margin: 14px 0 6px; font-weight: 700; font-size: 14px; }
+    input, select, textarea {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: #10142a;
+      color: var(--text);
+      font-size: 15px;
+    }
+    textarea { min-height: 110px; resize: vertical; }
+    .row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    button {
+      width: 100%;
+      margin-top: 20px;
+      padding: 15px;
+      border: 0;
+      border-radius: 14px;
+      background: linear-gradient(90deg, var(--accent), #ffb347);
+      color: #20232e;
+      font-size: 17px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+    button:disabled { opacity: .6; cursor: wait; }
+    .hidden { display: none; }
+    .result-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+    .badge {
+      padding: 8px 14px;
+      border-radius: 999px;
+      font-weight: 900;
+    }
+    .win { background: rgba(79,140,255,.18); color: #9dc0ff; }
+    .lose { background: rgba(255,95,109,.16); color: #ff9aa3; }
+    .section { margin-top: 18px; }
+    .section h3 { margin: 0 0 8px; font-size: 17px; }
+    ul { margin: 0; padding-left: 20px; line-height: 1.7; color: #dfe5f3; }
+    .score {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .stat {
+      background: #10142a;
+      border-radius: 14px;
+      padding: 14px;
+      text-align: center;
+    }
+    .stat b { display: block; font-size: 22px; color: var(--accent); }
+    .stat span { font-size: 12px; color: var(--muted); }
+    .note { margin-top: 14px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+    footer {
+      text-align: center;
+      color: var(--muted);
+      padding: 20px;
+      font-size: 13px;
+    }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>포켓몬 유나이트 <span>AI 승패 분석기</span></h1>
+    <p class="lead">
+      자신의 유나이트 플레이 영상과 경기 정보를 입력하면, AI가 영상 흐름·포켓몬 성능·아이템·레벨·레이드 판단 등을 바탕으로
+      <b>승리 요인</b>과 <b>패배 요인</b>을 분석합니다.
+    </p>
+  </header>
+
+  <main>
+    <div class="grid">
+      <section class="card">
+        <h2>🎬 영상 정보</h2>
+
+        <label for="videoUrl">유튜브 또는 영상 링크</label>
+        <input id="videoUrl" placeholder="https://www.youtube.com/watch?v=..." />
+
+        <label for="videoFile">또는 영상 파일 업로드</label>
+        <input id="videoFile" type="file" accept="video/*" />
+
+        <label for="matchResult">경기 결과</label>
+        <select id="matchResult">
+          <option value="win">승리</option>
+          <option value="lose">패배</option>
+        </select>
+
+        <label for="pokemon">사용한 포켓몬</label>
+        <input id="pokemon" placeholder="예: 미미꼬, 이상해꽃, 루카리오" />
+
+        <label for="role">포지션</label>
+        <select id="role">
+          <option value="allrounder">올라운더</option>
+          <option value="attacker">공격형</option>
+          <option value="speedster">스피드스터</option>
+          <option value="defender">수비형</option>
+          <option value="supporter">서포터</option>
+        </select>
+
+        <label for="notes">영상에서 특히 기억나는 장면 / 고민</label>
+        <textarea id="notes" placeholder="예: 후반 레이드 전에 너무 깊게 들어갔고, 상대 정찰형에게 계속 커버당했습니다."></textarea>
+      </section>
+
+      <section class="card">
+        <h2>📊 경기 데이터</h2>
+
+        <div class="row">
+          <div>
+            <label for="kills">처치</label>
+            <input id="kills" type="number" min="0" value="0" />
+          </div>
+          <div>
+            <label for="deaths">데스</label>
+            <input id="deaths" type="number" min="0" value="0" />
+          </div>
+          <div>
+            <label for="assists">어시스트</label>
+            <input id="assists" type="number" min="0" value="0" />
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label for="damage">준 피해량</label>
+            <input id="damage" type="number" min="0" value="0" />
+          </div>
+          <div>
+            <label for="healing">회복량</label>
+            <input id="healing" type="number" min="0" value="0" />
+          </div>
+          <div>
+            <label for="score">득점</label>
+            <input id="score" type="number" min="0" value="0" />
+          </div>
+        </div>
+
+        <label for="finalLevel">최종 레벨</label>
+        <input id="finalLevel" type="number" min="1" max="15" value="13" />
+
+        <label for="items">사용한 배틀 아이템 / 홀드 아이템</label>
+        <input id="items" placeholder="예: 점프, 약체화 사슬, 위력 강화 뿔피리" />
+
+        <button id="analyzeBtn">AI로 승패 분석하기</button>
+        <p class="note">
+          영상 분석을 사용하려면 아래 <code>API_ENDPOINT</code>에 영상 분석 AI API 주소를 입력하세요.
+          API가 없어도 입력한 경기 데이터를 기반으로 기본 분석을 제공합니다.
+        </p>
+      </section>
+    </div>
+
+    <section id="resultCard" class="card hidden" style="margin-top: 18px;">
+      <div class="result-head">
+        <span id="resultBadge" class="badge win">승리</span>
+        <h2 id="resultTitle" style="margin: 0;">분석 결과</h2>
+      </div>
+
+      <div class="score">
+        <div class="stat"><b id="kda">0.0</b><span>KDA</span></div>
+        <div class="stat"><b id="damageScore">-</b><span>딜 기여</span></div>
+        <div class="stat"><b id="levelScore">-</b><span>성장</span></div>
+        <div class="stat"><b id="overall">-</b><span>종합 평가</span></div>
+      </div>
+
+      <div class="section">
+        <h3>✅ 승리 요인</h3>
+        <ul id="winFactors"></ul>
+      </div>
+
+      <div class="section">
+        <h3>⚠️ 패배 요인 / 개선점</h3>
+        <ul id="loseFactors"></ul>
+      </div>
+
+      <div class="section">
+        <h3>🎯 다음 경기 행동 지침</h3>
+        <ul id="tips"></ul>
+      </div>
+
+      <div class="section">
+        <h3>🤖 AI 상세 분석</h3>
+        <div id="aiAnalysis" class="note">분석 결과가 여기에 표시됩니다.</div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <a href="https://whyranno.github.io/Random_pokemon/">Random Pokémon 사이트로 돌아가기</a>
+  </footer>
+
+  <script>
+    // 여기에 본인의 영상 분석 AI API 주소를 넣으세요.
+    // 예: "https://your-api.example.com/analyze-unite"
+    const API_ENDPOINT = "";
+
+    const $ = id => document.getElementById(id);
+
+    function calculateLocalAnalysis(data) {
+      const kda = data.deaths === 0
+        ? (data.kills + data.assists)
+        : (data.kills + data.assists) / data.deaths;
+
+      const winFactors = [];
+      const loseFactors = [];
+      const tips = [];
+
+      if (kda >= 3) {
+        winFactors.push(`KDA ${kda.toFixed(2)}로 교전 기여도가 높았습니다. 좋은 타이밍의 합류와 생존이 결과에 도움이 되었을 가능성이 큽니다.`);
+      } else if (kda >= 1.5) {
+        winFactors.push(`KDA ${kda.toFixed(2)}로 무난한 교전 기여를 보였습니다.`);
+      } else {
+        loseFactors.push(`KDA ${kda.toFixed(2)}로 교전 기여가 상대적으로 낮습니다. 불필요한 한타 합류, 단독 진입, 시야 부족 상태의 이동을 점검해 보세요.`);
+        tips.push("다음 경기에서는 미니맵을 3~5초마다 확인하고, 아군 2명 이상과 함께 움직이세요.");
+      }
+
+      if (data.finalLevel >= 13) {
+        winFactors.push(`최종 레벨 ${data.finalLevel}로 성장이 안정적이었습니다. 레벨 우위는 레이드와 후반 교전에서 큰 변수가 됩니다.`);
+      } else if (data.finalLevel <= 11) {
+        loseFactors.push(`최종 레벨 ${data.finalLevel}로 성장이 다소 부족했습니다. 초반 야생 몬스터 정리, 교전 후 회수, 레인 관리에서 손해가 있었을 수 있습니다.`);
+        tips.push("교전 직후에는 무리하게 추격하기보다 근처 야생 몬스터와 점수를 먼저 회수해 레벨 격차를 만드세요.");
+      }
+
+      if (data.damage > 30000) {
+        winFactors.push("준 피해량이 높아 팀의 주요 딜링 역할을 수행했습니다.");
+      } else if (data.role === "attacker" || data.role === "allrounder") {
+        loseFactors.push("공격형·올라운더 포지션치고 준 피해량이 낮습니다. 포지셔닝, 스킬 명중률, 교전 진입 타이밍을 확인해 보세요.");
+      }
+
+      if (data.role === "defender" || data.role === "supporter") {
+        if (data.healing > 10000 || data.assists >= 5) {
+          winFactors.push("회복 또는 어시스트 기여가 높아 팀원 보호와 교전 지원 역할을 잘 수행했습니다.");
+        } else {
+          loseFactors.push("수비형·서포터로서 아군 보호 및 지원 기여가 부족했을 수 있습니다. 교전 중 아군 위치와 보호 스킬 사용 타이밍을 점검하세요.");
+        }
+      }
+
+      if (data.score >= 80) {
+        winFactors.push(`득점 ${data.score}점으로 점수 운영에 기여했습니다.`);
+      } else if (data.score < 30) {
+        loseFactors.push("득점이 적어 점수 운영 기여가 부족했습니다. 안전한 타이밍에 득점하거나, 아군과 함께 득점 구역을 확보했는지 확인하세요.");
+      }
+
+      if (data.notes && /레이드|라이코|자포|후반/.test(data.notes)) {
+        tips.push("레이드 전에는 체력·레벨·아군 생존 여부를 먼저 확인하고, 무리한 선진입보다 상대 진입 후 카운터를 노리세요.");
+      }
+
+      if (winFactors.length === 0) winFactors.push("명확한 대규모 기여 지표는 적지만, 포지션 특성에 따라 시야 장악·라인 관리·레이드 준비 등 기록에 드러나지 않는 기여가 있었을 수 있습니다.");
+      if (loseFactors.length === 0) loseFactors.push("입력된 수치상 뚜렷한 약점은 적습니다. 다만 영상 기반 분석을 추가하면 포지셔닝과 레이드 판단의 세부 문제를 더 정확히 잡을 수 있습니다.");
+      if (tips.length === 0) tips.push("다음 경기에서는 레이드 30초 전 체력·레벨·아군 위치를 점검하고, 교전 후에는 즉시 점수와 야생 몬스터를 회수하세요.");
+
+      const overall =
+        kda >= 3 && data.finalLevel >= 13 ? "우수" :
+        kda >= 1.5 ? "양호" : "개선 필요";
+
+      return { kda, winFactors, loseFactors, tips, overall };
+    }
+
+    function render(result, data) {
+      $("resultCard").classList.remove("hidden");
+      $("resultBadge").textContent = data.matchResult === "win" ? "승리 경기" : "패배 경기";
+      $("resultBadge").className = "badge " + (data.matchResult === "win" ? "win" : "lose");
+      $("resultTitle").textContent = `${data.pokemon || "선택한 포켓몬"} · ${data.roleName} 분석`;
+
+      $("kda").textContent = result.kda.toFixed(2);
+      $("damageScore").textContent = data.damage > 0 ? data.damage.toLocaleString() : "-";
+      $("levelScore").textContent = `Lv.${data.finalLevel}`;
+      $("overall").textContent = result.overall;
+
+      const fill = (id, items) => {
+        $(id).innerHTML = items.map(item => `<li>${item}</li>`).join("");
+      };
+
+      fill("winFactors", result.winFactors);
+      fill("loseFactors", result.loseFactors);
+      fill("tips", result.tips);
+    }
+
+    $("analyzeBtn").addEventListener("click", async () => {
+      const btn = $("analyzeBtn");
+      btn.disabled = true;
+      btn.textContent = "분석 중...";
+
+      const data = {
+        videoUrl: $("videoUrl").value.trim(),
+        videoFileName: $("videoFile").files[0]?.name || "",
+        matchResult: $("matchResult").value,
+        pokemon: $("pokemon").value.trim(),
+        role: $("role").value,
+        roleName: $("role").selectedOptions[0].textContent,
+        kills: Number($("kills").value || 0),
+        deaths: Number($("deaths").value || 0),
+        assists: Number($("assists").value || 0),
+        damage: Number($("damage").value || 0),
+        healing: Number($("healing").value || 0),
+        score: Number($("score").value || 0),
+        finalLevel: Number($("finalLevel").value || 0),
+        items: $("items").value.trim(),
+        notes: $("notes").value.trim()
+      };
+
+      let result = calculateLocalAnalysis(data);
+      let aiText = "현재는 입력된 경기 데이터 기반 분석 결과입니다. 영상 URL과 AI API를 연결하면 레이드 판단, 포지셔닝, 스킬 사용, 시야 장악, 교전 진입 타이밍까지 분석할 수 있습니다.";
+
+      if (API_ENDPOINT) {
+        try {
+          const response = await fetch(API_ENDPOINT, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data)
+          });
+          const json = await response.json();
+
+          if (json.winFactors) result.winFactors = json.winFactors;
+          if (json.loseFactors) result.loseFactors = json.loseFactors;
+          if (json.tips) result.tips = json.tips;
+          if (json.overall) result.overall = json.overall;
+          if (json.analysis) aiText = json.analysis;
+        } catch (error) {
+          aiText = "AI API 호출에 실패하여 로컬 규칙 기반 분석 결과를 표시했습니다.";
+        }
+      }
+
+      render(result, data);
+      $("aiAnalysis").textContent = aiText;
+
+      btn.disabled = false;
+      btn.textContent = "AI로 승패 분석하기";
+    });
+  </script>
+</body>
+</html>
